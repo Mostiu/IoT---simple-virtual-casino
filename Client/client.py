@@ -6,8 +6,12 @@ def on_connect(client, userdata, flags, rc):
     print(f"Connected with result code {rc}")
 
 
-def on_message(client, userdata, msg):
-    print(f"Received response: {msg.payload.decode()}")
+def on_history(client, userdata, msg):
+    print(f"Received history response: {msg.payload.decode()}")
+
+
+def on_game(client, userdata, msg):
+    print(f"Received game response: {msg.payload.decode()}")
 
 
 def on_publish(client, userdata, mid):
@@ -18,33 +22,47 @@ def on_disconnect(client, userdata, rc):
     print(f"Disconnected with result code {rc}")
 
 
-# Change these values based on your MQTT broker configuration
 broker_address = "localhost"
 broker_port = 1883
+client_id = "client1"
 
-client_id = "client_1"  # Unique client ID for each client
-topic = "your_topic"
-
-client = mqtt.Client(client_id)
+client = mqtt.Client()
 client.on_connect = on_connect
-client.on_message = on_message
 client.on_publish = on_publish
 client.on_disconnect = on_disconnect
+
+# Pass client_id as userdata to on_history and on_game callbacks
+client.message_callback_add(f"{client_id}_history_response", on_history)
+client.message_callback_add(f"{client_id}_response", on_game)
+client.user_data_set({"client_id": client_id})
 
 client.connect(broker_address, broker_port, 60)
 
 try:
     client.loop_start()
+    client.subscribe(f"{client_id}_response")
+    client.subscribe(f"{client_id}_history_response")
 
     while True:
-        client_id = input("Enter client ID: ")
-        bet_size = input("Enter bet size: ")
-        color = input("Enter color (e.g., red, black): ")
-        client.subscribe(f"{client_id}_response")
+        choice = input("Enter 'history' or 'game' to choose the type of message (or 'exit' to quit): ")
 
-        message = f"{client_id},{bet_size}, {color}"
+        if choice.lower() == 'exit':
+            break
 
-        client.publish(topic, message)
+        if choice.lower() not in ['history', 'game']:
+            print("Invalid choice. Please enter 'history', 'game', or 'exit'.")
+            continue
+
+        player_id = input("Enter player ID: ")
+
+        if choice.lower() == 'history':
+            message = f"{client_id},{player_id}"
+            client.publish(choice, message)
+        elif choice.lower() == 'game':
+            bet_size = input("Enter bet size: ")
+            color = input("Enter color (e.g., red, black): ")
+            message = f"{client_id},{bet_size},{color},{player_id}"
+            client.publish(choice, message)
 
         time.sleep(1)
 

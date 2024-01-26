@@ -8,6 +8,7 @@ broker = "localhost"
 
 client = mqtt.Client()
 
+
 def process_message(client, userdata, message):
     curr_dir = os.getcwd()
     file_path = os.path.join(curr_dir, 'output.txt')
@@ -15,6 +16,7 @@ def process_message(client, userdata, message):
     with open(file_path, 'a') as file:
         file.write(message_decoded + '\n')
         print(message_decoded)
+
 
 def connect_to_broker():
     client.connect(broker)
@@ -36,5 +38,5 @@ def run_receiver():
     disconnect_from_broker()
 
 
-if _name_ == "_main_":
+if __name__ == "_main_":
     run_receiver()
