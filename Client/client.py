@@ -22,7 +22,7 @@ def on_disconnect(client, userdata, rc):
     print(f"Disconnected with result code {rc}")
 
 
-broker_address = "localhost"
+broker_address = "156.17.237.62"
 broker_port = 1883
 client_id = "client1"
 

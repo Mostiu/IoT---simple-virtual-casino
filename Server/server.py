@@ -1,6 +1,6 @@
 import paho.mqtt.client as mqtt
 import threading
-import time
+import random
 
 client_messages = {}
 client_counter = 0
@@ -28,13 +28,20 @@ def on_game(client, userdata, msg):
     global messages_sent
     with lock:
         message_received = msg.payload.decode()
-        player_id = message_received.split(",")[3]
-        client_messages[player_id] = message_received
+        data = message_received.split(",")
+        player_id = data[3]
+        client_messages[player_id] = data
+        print(client_messages)
         if len(client_messages.keys()) >= num_clients:
+            rolled_number = random.randint(1, 37)
+            rolled_color = "red" if rolled_number % 2 == 0 else "black"
             for key, message in client_messages.items():
-                response = f"Gj:{key}"
-                client.publish(f"{message.split(',')[0]}_response", response)
-                print(f"Sent response to {message.split(',')[0]}")
+                if message[2] == rolled_color or message[2] == str(rolled_number):
+                    response = f"You won {message[3]} - your bet: {message[2]} rolled: {rolled_number} {rolled_color}"
+                else:
+                    response = f"You lost {message[3]} - your bet: {message[2]} rolled: {rolled_number} {rolled_color}"
+                client.publish(f"{message[0]}_response", response)
+                print(f"Sent response to {message[0]}")
                 messages_sent += 1
             client_messages.clear()
 
@@ -49,7 +56,7 @@ def on_disconnect(client, userdata, rc):
     print(f"Disconnected with result code {rc}")
 
 
-broker_address = "localhost"
+broker_address = "156.17.237.62"
 broker_port = 1883
 
 server = mqtt.Client()
