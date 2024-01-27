@@ -2,106 +2,107 @@ import paho.mqtt.client as mqtt
 import threading
 import random
 
-client_messages = {}
-client_counter = 0
-messages_sent = 0
-is_active_game = False
-lock = threading.Lock()
+class GameServer:
+    def __init__(self, broker_address, broker_port):
+        self.broker_address = broker_address
+        self.broker_port = broker_port
+        self.server = mqtt.Client()
+        self.num_clients = 0
+        self.client_messages = {}
+        self.messages_sent = 0
+        self.is_active_game = False
+        self.lock = threading.Lock()
 
+        # Set up MQTT callbacks
+        self.server.on_connect = self.on_connect
+        self.server.on_publish = self.on_publish
+        self.server.on_disconnect = self.on_disconnect
+        self.server.message_callback_add("history", self.on_history)
+        self.server.message_callback_add("game", self.on_game)
 
-def on_connect(client, userdata, flags, rc):
-    print(f"Connected with result code {rc}")
-    client.subscribe("game")
-    client.subscribe("history")
+    def on_connect(self, client, userdata, flags, rc):
+        print(f"Connected with result code {rc}")
+        client.subscribe("game")
+        client.subscribe("history")
 
+    def on_history(self, client, userdata, msg):
+        message = msg.payload.decode()
+        data = message.split(",")
+        response = f"Your history, {data[1]}"
+        client.publish(f"{data[0]}_history_response", response)
 
-def on_history(client, userdata, msg):
-    message = msg.payload.decode()
-    data = message.split(",")
-    response = f"Your history, {data[1]}"
-    client.publish(f"{data[0]}_history_response", response)
+    def on_game(self, client, userdata, msg):
+        with self.lock:
+            message_received = msg.payload.decode()
+            data = message_received.split(",")
+            player_id = data[3]
+            self.client_messages[player_id] = data
+            print(self.client_messages)
+            if len(self.client_messages.keys()) >= self.num_clients:
+                self.play_game()
 
+    def play_game(self):
+        rolled_number = random.randint(1, 37)
+        rolled_color = "red" if rolled_number % 2 == 0 else "black"
+        for key, message in self.client_messages.items():
+            if message[2] == rolled_color or message[2] == str(rolled_number):
+                response = f"You won {message[3]} - your bet: {message[2]} rolled: {rolled_number} {rolled_color}"
+            else:
+                response = f"You lost {message[3]} - your bet: {message[2]} rolled: {rolled_number} {rolled_color}"
+            self.server.publish(f"{message[0]}_response", response)
+            print(f"Sent response to {message[0]}")
+            self.messages_sent += 1
+        self.client_messages.clear()
 
-def on_game(client, userdata, msg):
-    global client_counter
-    global is_active_game
-    global messages_sent
-    with lock:
-        message_received = msg.payload.decode()
-        data = message_received.split(",")
-        player_id = data[3]
-        client_messages[player_id] = data
-        print(client_messages)
-        if len(client_messages.keys()) >= num_clients:
-            rolled_number = random.randint(1, 37)
-            rolled_color = "red" if rolled_number % 2 == 0 else "black"
-            for key, message in client_messages.items():
-                if message[2] == rolled_color or message[2] == str(rolled_number):
-                    response = f"You won {message[3]} - your bet: {message[2]} rolled: {rolled_number} {rolled_color}"
-                else:
-                    response = f"You lost {message[3]} - your bet: {message[2]} rolled: {rolled_number} {rolled_color}"
-                client.publish(f"{message[0]}_response", response)
-                print(f"Sent response to {message[0]}")
-                messages_sent += 1
-            client_messages.clear()
+    def on_publish(self, client, userdata, mid):
+        return
 
+    def on_disconnect(self, client, userdata, rc):
+        print(f"Disconnected with result code {rc}")
 
-def on_publish(client, userdata, mid):
-    global client_counter
-    global messages_sent
-    client_counter = 0
-
-
-def on_disconnect(client, userdata, rc):
-    print(f"Disconnected with result code {rc}")
-
-
-broker_address = "156.17.237.62"
-broker_port = 1883
-
-server = mqtt.Client()
-server.on_connect = on_connect
-server.on_publish = on_publish
-server.on_disconnect = on_disconnect
-server.message_callback_add("history", on_history)
-server.message_callback_add("game", on_game)
-
-server.connect(broker_address, broker_port, 60)
-
-try:
-    server.loop_start()
-    while True:
-        server.subscribe("game")
-        server.subscribe("history")
-        game_name = input("Enter the game name (or 'exit' to quit): ")
-
-        if game_name.lower() == 'exit':
-            break
+    def start(self):
+        self.server.connect(self.broker_address, self.broker_port, 60)
+        self.server.loop_start()
 
         try:
-            num_clients = int(input("Enter the number of clients: "))
-            is_active_game = True
-        except ValueError:
-            print("Invalid input. Please enter a valid number.")
-            continue
+            while True:
+                self.server.subscribe("game")
+                self.server.subscribe("history")
+                game_name = input("Enter the game name (or 'exit' to quit): ")
 
-        while is_active_game:
-            print(f"Waiting for {num_clients} clients to send messages...")
+                if game_name.lower() == 'exit':
+                    break
 
-            while messages_sent < num_clients:
-                pass
-            client_counter = 0
-            messages_sent = 0
-            client_messages.clear()
+                try:
+                    self.num_clients = int(input("Enter the number of clients: "))
+                    self.is_active_game = True
+                except ValueError:
+                    print("Invalid input. Please enter a valid number.")
+                    continue
 
-            next_game = input("Do you want to change the amount of players? (yes/no): ").lower()
-            if next_game == 'yes':
-                is_active_game = False
-                break
+                while self.is_active_game:
+                    print(f"Waiting for {self.num_clients} clients to send messages...")
 
-except KeyboardInterrupt:
-    print("Server shutting down")
+                    while self.messages_sent < self.num_clients:
+                        pass
 
-finally:
-    server.loop_stop()
-    server.disconnect()
+                    self.messages_sent = 0
+                    self.client_messages.clear()
+
+                    next_game = input("Do you want to change the amount of players? (yes/no): ").lower()
+                    if next_game == 'yes':
+                        self.is_active_game = False
+
+
+        except KeyboardInterrupt:
+            print("Server shutting down")
+
+        finally:
+            self.server.loop_stop()
+            self.server.disconnect()
+
+if __name__ == "__main__":
+    broker_address = "156.17.237.62"
+    broker_port = 1883
+    game_server = GameServer(broker_address, broker_port)
+    game_server.start()
