@@ -113,7 +113,7 @@ class GameServer:
 
 
 if __name__ == "__main__":
-    broker_address = "156.17.237.62"
+    broker_address = "192.168.31.169"
     broker_port = 1883
     game_server = GameServer(broker_address, broker_port)
     game_server.start()

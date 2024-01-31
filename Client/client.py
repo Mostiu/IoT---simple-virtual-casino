@@ -1,6 +1,6 @@
 import paho.mqtt.client as mqtt
 import time
-
+from mfrc522 import MFRC522
 
 class InteractiveMQTTClient:
     def __init__(self, broker_address, broker_port, client_id):
@@ -36,6 +36,21 @@ class InteractiveMQTTClient:
     def connect_to_broker(self):
         self.client.connect(self.broker_address, self.broker_port, 60)
 
+    def read_rfid_card(self):
+        MIFAREReader = MFRC522()
+
+        time.sleep(2)
+
+        while True:
+            (status, TagType) = MIFAREReader.MFRC522_Request(MIFAREReader.PICC_REQIDL)
+            if status == MIFAREReader.MI_OK:
+                (status, uid) = MIFAREReader.MFRC522_Anticoll()
+                if status == MIFAREReader.MI_OK:
+                    num = 0
+                    for i in range(0, len(uid)):
+                        num += uid[i] << (i * 8)
+                    return str(num)
+
     def start(self):
         self.client.loop_start()
         self.client.subscribe(f"{self.client_id}_history_response")
@@ -52,7 +67,8 @@ class InteractiveMQTTClient:
                     print("Invalid choice. Please enter 'history', 'game', or 'exit'.")
                     continue
 
-                player_id = input("Enter player ID: ")
+                player_id = self.read_rfid_card()
+               # player_id = input("Enter player ID: ")
 
                 if choice.lower() == 'history':
                     message = f"{self.client_id},{player_id}"
@@ -77,7 +93,7 @@ class InteractiveMQTTClient:
 
 
 if __name__ == "__main__":
-    broker_address = "156.17.237.62"
+    broker_address = "192.168.31.169"
     broker_port = 1883
     client_id = "client1"
 
