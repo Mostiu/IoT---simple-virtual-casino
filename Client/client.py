@@ -1,5 +1,46 @@
 import paho.mqtt.client as mqtt
 import time
+import RPi.GPIO as GPIO
+from config import * # pylint: disable=unused-wildcard-import
+import neopixel
+import board
+
+global executing 
+executing = False
+
+pixels = neopixel.NeoPixel(board.D18, 8, brightness=1.0/32, auto_write=False)
+
+def buzzer_state(state):
+    GPIO.output(buzzerPin, not state) # pylint: disable=no-member
+
+def play_animation(sound):
+    global executing
+    executing = True
+    sleep_time = 0.25
+    while executing:
+        for i in range(0, 8):
+            if i % 2 == 0:
+                pixels[i]((255, 0, 0))
+            else:
+                pixels[i]((0, 255, 0))
+        pixels.show()
+        if sound:
+            buzzer_state(True)
+        time.sleep(sleep_time)
+
+        for i in range(0, 8):
+            if i % 2 == 0:
+                pixels[i]((0, 255, 0))
+            else:
+                pixels[i]((255, 0, 0))
+        pixels.show()
+        if sound:
+            buzzer_state(False)
+        time.sleep(sleep_time)
+        # if recieved a message set executing = False
+    pixels.fill((0, 0, 0))
+    pixels.show()
+    buzzer_state(False)
 
 
 class InteractiveMQTTClient:
